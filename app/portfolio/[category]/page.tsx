@@ -1,5 +1,3 @@
-import Image from 'next/image'
-
 interface PageProps {
   params: Promise<{
     category: string
