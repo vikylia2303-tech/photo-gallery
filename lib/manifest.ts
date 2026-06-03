@@ -12,7 +12,7 @@ export type Album = {
   coverId?: string
   privateKey?: string
 }
-export type Manifest = { albums: Album[] }
+export type Manifest = { albums: Album[]; homeOrder?: string[] }
 
 const EMPTY: Manifest = { albums: [] }
 
