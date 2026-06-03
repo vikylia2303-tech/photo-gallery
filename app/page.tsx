@@ -5,14 +5,14 @@ export const dynamic = 'force-dynamic'
 
 export default async function Home() {
   const manifest = await getManifest()
-  const albums = manifest.albums.filter((a) => a.photos.length > 0)
+  const albums = manifest.albums.filter((a) => a.photos.length > 0 && a.public)
   const heroPhotos = albums.flatMap((a) => a.photos).slice(0, 8)
 
   return (
     <div>
       {/* Hero signature */}
       <section className="pt-16 pb-12 text-center">
-        <h1 className="signature text-6xl md:text-7xl text-black">Photo Gallery</h1>
+        <h1 className="signature text-6xl md:text-7xl text-black">Вика</h1>
         <p className="overline mt-3">photographer</p>
       </section>
 
