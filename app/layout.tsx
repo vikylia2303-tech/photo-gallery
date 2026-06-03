@@ -4,8 +4,8 @@ import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 
 export const metadata: Metadata = {
-  title: 'Photo Gallery',
-  description: 'Professional photo portfolio',
+  title: 'Photo Gallery — фотограф в стиле живой фотографии',
+  description: 'Lifestyle-фотография: портреты, свадьбы, события. Живые эмоции и настоящие моменты.',
 }
 
 export default function RootLayout({
@@ -15,7 +15,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body className="bg-cream text-dark">
+      <body>
         <Header />
         <main>{children}</main>
         <Footer />

@@ -1,66 +1,52 @@
 export default function AboutPage() {
   return (
-    <div className="container py-20">
-      <h1 className="text-4xl font-serif mb-12">About Me</h1>
+    <div>
+      <section className="py-20">
+        <div className="container-narrow text-center">
+          <p className="overline mb-6">Обо мне</p>
+          <h1 className="section-title text-5xl md:text-6xl mb-12">Привет! Меня зовут Юлия</h1>
+        </div>
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-        <div className="md:col-span-2">
-          <div className="prose prose-lg max-w-none space-y-6">
-            <p className="text-lg leading-relaxed">
-              Welcome to my photography studio. I specialize in portrait and event photography,
-              capturing authentic moments that tell your story. With over 10 years of experience,
-              I've had the privilege of documenting countless weddings, celebrations, and intimate portraits.
-            </p>
+      <section className="mb-16">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://picsum.photos/seed/about-portrait/1600/1000"
+          alt="Портрет фотографа"
+          className="w-full h-[60vh] object-cover bw"
+        />
+      </section>
 
-            <h2 className="text-2xl font-serif mt-12">My Style</h2>
-            <p className="text-lg leading-relaxed">
-              I believe photography is about capturing the essence of a moment — the genuine emotions,
-              the connections between people, and the beauty in everyday life. My work is characterized
-              by natural lighting, authentic poses, and timeless compositions.
-            </p>
+      <section className="pb-24">
+        <div className="container-narrow space-y-6 text-[17px] leading-relaxed text-gray-600">
+          <p>
+            Я фотограф в стиле живой фотографии — Lifestyle. Снимаю в Волгограде, Москве
+            и Санкт-Петербурге. В профессиональной фотографии с 2019 года, и за это время
+            успела попробовать много направлений: вместе с внутренними переменами менялись
+            и мои предпочтения, видение, обработка, глубина вовлечённости в процесс.
+          </p>
+          <p>
+            В данный момент не причисляю себя к какому-то конкретному жанру — я люблю фиксировать
+            ЖИЗНЬ, и не важно, кто у меня в кадре: семья, один герой, пара, танцор или музыкальная группа.
+          </p>
+          <p>
+            Главная ценность — живые эмоции, настоящие неподдельные чувства, моменты жизни,
+            которые я ловлю и сохраняю вместе с Вами.
+          </p>
+          <p>
+            Для меня всегда в приоритете человек, а пространство вокруг только дополняет картинку —
+            по этой причине я фотографирую не во всех студиях и очень щепетильно отношусь к свету на локации.
+          </p>
+          <p>
+            Вы попали не просто на сайт — это дом для моих работ. Ознакомившись с ними, Вы можете
+            понять, какой результат получите после нашей встречи.
+          </p>
 
-            <h2 className="text-2xl font-serif mt-12">Services</h2>
-            <ul className="space-y-3 text-lg">
-              <li>✓ Portrait Sessions</li>
-              <li>✓ Wedding Photography</li>
-              <li>✓ Event Coverage</li>
-              <li>✓ Family Shoots</li>
-              <li>✓ Commercial Photography</li>
-            </ul>
+          <div className="pt-8 text-center">
+            <a href="#contact" className="btn">Связаться со мной</a>
           </div>
         </div>
-
-        <div>
-          <div className="bg-gray-300 h-80 rounded-lg flex items-center justify-center text-gray-500">
-            Profile Photo
-          </div>
-
-          <div className="mt-8 bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold mb-4">Contact</h3>
-            <div className="space-y-3 text-sm">
-              <p>
-                <strong>Email:</strong>
-                <br />
-                <a href="mailto:hello@example.com" className="text-blue-600 hover:underline">
-                  hello@example.com
-                </a>
-              </p>
-              <p>
-                <strong>Phone:</strong>
-                <br />
-                <a href="tel:+1234567890" className="text-blue-600 hover:underline">
-                  +1 (234) 567-890
-                </a>
-              </p>
-              <p>
-                <strong>Location:</strong>
-                <br />
-                New York, USA
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      </section>
     </div>
   )
 }
