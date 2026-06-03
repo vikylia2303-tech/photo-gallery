@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic'
 export default async function Home() {
   const manifest = await getManifest()
   const albums = manifest.albums.filter((a) => a.photos.length > 0 && a.public)
-  const heroPhotos = albums.flatMap((a) => a.photos).slice(0, 8)
+  const chosen = manifest.albums.flatMap((a) => a.photos).filter((p) => p.featured)
+  const heroPhotos = chosen.length > 0 ? chosen : albums.flatMap((a) => a.photos).slice(0, 8)
 
   return (
     <div>
@@ -62,10 +63,13 @@ export default async function Home() {
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {albums.map((album) => (
+              {albums.map((album) => {
+                const cover =
+                  album.photos.find((p) => p.id === album.coverId) || album.photos[0]
+                return (
                 <Link key={album.slug} href={`/portfolio/${album.slug}`} className="photo-item group">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={album.photos[0].url} alt={album.title} />
+                  <img src={cover.url} alt={album.title} />
                   <div className="absolute inset-0 flex items-end justify-center pb-8 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition duration-500">
                     <span className="text-white tracking-[0.25em] uppercase text-sm">Смотреть</span>
                   </div>
@@ -73,7 +77,8 @@ export default async function Home() {
                     {album.title}
                   </h3>
                 </Link>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

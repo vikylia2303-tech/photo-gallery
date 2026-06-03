@@ -128,44 +128,46 @@ h1, h2, h3, h4 {
   transform: scale(1.04);
 }
 
-/* Album gallery — masonry keeps each photo's real proportions */
-.gallery-masonry {
-  column-count: 1;
-  column-gap: 14px;
-}
-
-@media (min-width: 640px) {
-  .gallery-masonry { column-count: 2; }
+/* Album gallery — reading order (left→right), natural proportions, supports 2x photos */
+.gallery-rows {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: 8px;
+  gap: 14px;
 }
 
 @media (min-width: 900px) {
-  .gallery-masonry { column-count: 3; }
+  .gallery-rows { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (min-width: 1280px) {
-  .gallery-masonry { column-count: 4; }
+  .gallery-rows { grid-template-columns: repeat(4, 1fr); }
 }
 
-.gallery-masonry .ph {
+.gallery-rows .ph {
+  grid-row-end: span 36;
   display: block;
   width: 100%;
-  margin: 0 0 14px;
+  margin: 0;
   padding: 0;
   border: 0;
   background: #ededed;
   cursor: pointer;
   overflow: hidden;
-  break-inside: avoid;
 }
 
-.gallery-masonry .ph img {
+.gallery-rows .ph.big {
+  grid-column: span 2;
+}
+
+.gallery-rows .ph img {
   display: block;
   width: 100%;
   height: auto;
   transition: transform 0.6s ease;
 }
 
-.gallery-masonry .ph:hover img {
+.gallery-rows .ph:hover img {
   transform: scale(1.03);
 }
 
