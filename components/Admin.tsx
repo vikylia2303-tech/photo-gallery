@@ -13,7 +13,7 @@ type Album = {
   coverId?: string
   privateKey?: string
 }
-type Manifest = { albums: Album[]; homeOrder?: string[] }
+type Manifest = { albums: Album[]; homeOrder?: string[]; aboutPhoto?: string }
 
 const ROW = 8
 const GAP = 14
@@ -71,7 +71,7 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false)
   const [manifest, setManifest] = useState<Manifest>({ albums: [] })
   const [selected, setSelected] = useState<string | null>(null)
-  const [view, setView] = useState<'albums' | 'home'>('albums')
+  const [view, setView] = useState<'albums' | 'home' | 'about'>('albums')
   const [newTitle, setNewTitle] = useState('')
   const [status, setStatus] = useState('')
   const [uploading, setUploading] = useState('')
@@ -367,6 +367,33 @@ export default function Admin() {
     save(next)
   }
 
+  async function uploadAboutPhoto(files: FileList | null) {
+    if (!files || !files[0]) return
+    setUploading('Загрузка…')
+    setError('')
+    try {
+      const data = await resizeImage(files[0])
+      const blob = await upload(
+        `photos/about/${Date.now()}-${Math.round(Math.random() * 1e6)}.jpg`,
+        data,
+        {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
+          clientPayload: password,
+          contentType: 'image/jpeg',
+        }
+      )
+      save({ ...manifest, aboutPhoto: blob.url })
+    } catch {
+      setError('Не удалось загрузить фото')
+    }
+    setUploading('')
+  }
+
+  function removeAboutPhoto() {
+    save({ ...manifest, aboutPhoto: undefined })
+  }
+
   if (!authed) {
     return (
       <div className="container-narrow py-32">
@@ -419,6 +446,12 @@ export default function Admin() {
         >
           Главная страница
         </button>
+        <button
+          className={`btn px-5 py-2 text-xs ${view === 'about' ? 'btn-primary' : ''}`}
+          onClick={() => setView('about')}
+        >
+          Страница «Обо мне»
+        </button>
       </div>
 
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
@@ -458,6 +491,35 @@ export default function Admin() {
               ))}
             </div>
           )}
+        </div>
+      ) : view === 'about' ? (
+        <div className="max-w-md">
+          <p className="text-sm text-gray-500 mb-4">
+            Фото, которое показывается на странице «Обо мне». Загрузите свой портрет — он встанет на место.
+          </p>
+          {manifest.aboutPhoto && (
+            <div className="mb-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={manifest.aboutPhoto} alt="" className="w-full max-w-xs border border-gray-100" />
+            </div>
+          )}
+          <div className="flex gap-3 items-center">
+            <label className="btn btn-primary inline-block cursor-pointer">
+              {uploading || (manifest.aboutPhoto ? 'Заменить фото' : 'Загрузить фото')}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={!!uploading}
+                onChange={(e) => uploadAboutPhoto(e.target.files)}
+              />
+            </label>
+            {manifest.aboutPhoto && (
+              <button className="text-sm text-red-600 hover:underline" onClick={removeAboutPhoto}>
+                Убрать фото
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex flex-col md:flex-row gap-10">
