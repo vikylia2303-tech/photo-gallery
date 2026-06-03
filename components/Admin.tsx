@@ -3,33 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { upload } from '@vercel/blob/client'
 
-async function resizeImage(file: File): Promise<Blob> {
-  try {
-    const bmp = await createImageBitmap(file)
-    const max = 2200
-    let w = bmp.width
-    let h = bmp.height
-    if (w > max || h > max) {
-      const r = Math.min(max / w, max / h)
-      w = Math.round(w * r)
-      h = Math.round(h * r)
-    }
-    const cv = document.createElement('canvas')
-    cv.width = w
-    cv.height = h
-    const ctx = cv.getContext('2d')
-    if (!ctx) return file
-    ctx.drawImage(bmp, 0, 0, w, h)
-    return await new Promise<Blob>((res) =>
-      cv.toBlob((b) => res(b || file), 'image/jpeg', 0.85)
-    )
-  } catch {
-    return file
-  }
-}
-
 type Photo = { id: string; url: string }
-type Album = { slug: string; title: string; photos: Photo[] }
+type Album = { slug: string; title: string; photos: Photo[]; public?: boolean }
 type Manifest = { albums: Album[] }
 
 function slugify(s: string) {
@@ -49,6 +24,13 @@ function slugify(s: string) {
   )
 }
 
+function fileExt(file: File): string {
+  const fromName = (file.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  if (fromName) return fromName
+  const fromType = (file.type.split('/').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  return fromType || 'jpg'
+}
+
 export default function Admin() {
   const [password, setPassword] = useState('')
   const [authed, setAuthed] = useState(false)
@@ -56,7 +38,7 @@ export default function Admin() {
   const [selected, setSelected] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState('')
   const [status, setStatus] = useState('')
-  const [uploading, setUploading] = useState(false)
+  const [uploading, setUploading] = useState('')
   const [error, setError] = useState('')
   const dragIndex = useRef<number | null>(null)
 
@@ -86,7 +68,6 @@ export default function Admin() {
     const res = await fetch('/api/manifest')
     const data = (await res.json()) as Manifest
     const m: Manifest = data && Array.isArray(data.albums) ? data : { albums: [] }
-    // verify password with a no-op save
     const check = await fetch('/api/manifest', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-admin-password': password },
@@ -106,7 +87,7 @@ export default function Admin() {
     if (!title) return
     let slug = slugify(title)
     while (manifest.albums.some((a) => a.slug === slug)) slug = slug + '-2'
-    const next = { albums: [...manifest.albums, { slug, title, photos: [] }] }
+    const next = { albums: [...manifest.albums, { slug, title, photos: [], public: false }] }
     setNewTitle('')
     setSelected(slug)
     save(next)
@@ -129,30 +110,41 @@ export default function Admin() {
     save(next)
   }
 
+  function togglePublic(value: boolean) {
+    if (!current) return
+    const next = {
+      albums: manifest.albums.map((a) => (a.slug === current.slug ? { ...a, public: value } : a)),
+    }
+    save(next)
+  }
+
   async function onFiles(files: FileList | null) {
     if (!files || !current) return
-    setUploading(true)
     setError('')
+    const list = Array.from(files)
     const added: Photo[] = []
-    for (const file of Array.from(files)) {
+    for (let i = 0; i < list.length; i++) {
+      const file = list[i]
+      setUploading(`Загрузка ${i + 1} / ${list.length}…`)
       try {
-        const data = await resizeImage(file)
         const blob = await upload(
-          `photos/${current.slug}/${Date.now()}-${Math.round(Math.random() * 1e6)}.jpg`,
-          data,
+          `photos/${current.slug}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${fileExt(file)}`,
+          file,
           {
             access: 'public',
             handleUploadUrl: '/api/upload',
             clientPayload: password,
+            multipart: true,
+            contentType: file.type || undefined,
           }
         )
         added.push({ id: (crypto as Crypto).randomUUID(), url: blob.url })
       } catch {
-        setError('Ошибка загрузки файла')
+        setError('Часть файлов не загрузилась — попробуйте их ещё раз')
       }
     }
+    setUploading('')
     if (added.length) updateCurrentPhotos([...current.photos, ...added])
-    setUploading(false)
   }
 
   function removePhoto(id: string) {
@@ -219,7 +211,10 @@ export default function Admin() {
                   }`}
                   onClick={() => setSelected(a.slug)}
                 >
-                  <span>{a.title}</span>
+                  <span>
+                    {a.title}
+                    {!a.public && <span className="text-gray-400"> · скрыт</span>}
+                  </span>
                   <span className="text-gray-400 text-xs">{a.photos.length}</span>
                 </button>
               </li>
@@ -236,7 +231,7 @@ export default function Admin() {
             <p className="text-gray-500">Выберите альбом или создайте новый слева.</p>
           ) : (
             <div>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl">{current.title}</h2>
                 <button
                   className="text-sm text-red-600 hover:underline"
@@ -246,19 +241,33 @@ export default function Admin() {
                 </button>
               </div>
 
+              <label className="flex items-center gap-2 text-sm mb-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!current.public}
+                  onChange={(e) => togglePublic(e.target.checked)}
+                />
+                Показывать в портфолио (видно всем)
+              </label>
+              <p className="text-xs text-gray-400 mb-6">
+                {current.public
+                  ? 'Альбом виден всем в разделе «Портфолио».'
+                  : 'Альбом скрыт из портфолио — открыть можно только по прямой ссылке.'}
+              </p>
+
               <label className="btn btn-primary inline-block mb-2 cursor-pointer">
-                {uploading ? 'Загрузка…' : 'Загрузить фото'}
+                {uploading || 'Загрузить фото'}
                 <input
                   type="file"
                   accept="image/*"
                   multiple
                   className="hidden"
-                  disabled={uploading}
+                  disabled={!!uploading}
                   onChange={(e) => onFiles(e.target.files)}
                 />
               </label>
               <p className="text-xs text-gray-400 mb-8">
-                Можно выбрать сразу несколько. Перетаскивайте фото, чтобы менять порядок.
+                Можно выбрать сразу несколько. Фото грузятся в исходном качестве. Перетаскивайте, чтобы менять порядок.
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

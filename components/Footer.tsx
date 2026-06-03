@@ -2,7 +2,7 @@ export default function Footer() {
   return (
     <footer id="contact" className="border-t border-gray-100 py-20 text-center">
       <div className="container-narrow">
-        <h2 className="signature text-5xl text-black mb-2">Photo Gallery</h2>
+        <h2 className="signature text-5xl text-black mb-2">Вика</h2>
         <p className="overline mb-10">photographer</p>
 
         <div className="space-y-2 text-gray-600 text-[15px]">
@@ -27,7 +27,7 @@ export default function Footer() {
           </a>
         </div>
 
-        <p className="text-xs text-gray-400 mt-12 tracking-wide">© 2026 Photo Gallery. Все права защищены.</p>
+        <p className="text-xs text-gray-400 mt-12 tracking-wide">© 2026 Вика. Все права защищены.</p>
       </div>
     </footer>
   )

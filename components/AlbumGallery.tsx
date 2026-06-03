@@ -4,8 +4,35 @@ import { useState, useEffect, useCallback } from 'react'
 
 type Photo = { id: string; url: string }
 
+declare global {
+  interface Window {
+    JSZip?: new () => {
+      file: (name: string, data: Blob) => void
+      generateAsync: (opts: { type: 'blob' }) => Promise<Blob>
+    }
+  }
+}
+
+function loadJSZip(): Promise<NonNullable<Window['JSZip']>> {
+  if (window.JSZip) return Promise.resolve(window.JSZip)
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
+    s.onload = () => (window.JSZip ? resolve(window.JSZip) : reject(new Error('jszip')))
+    s.onerror = () => reject(new Error('jszip'))
+    document.head.appendChild(s)
+  })
+}
+
+function extFromUrl(url: string): string {
+  const clean = url.split('?')[0]
+  const m = clean.match(/\.([a-zA-Z0-9]{2,5})$/)
+  return m ? m[1].toLowerCase() : 'jpg'
+}
+
 export default function AlbumGallery({ photos, title }: { photos: Photo[]; title: string }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const [dl, setDl] = useState('')
 
   const close = useCallback(() => setOpenIndex(null), [])
   const prev = useCallback(
@@ -32,6 +59,34 @@ export default function AlbumGallery({ photos, title }: { photos: Photo[]; title
     }
   }, [openIndex, close, prev, next])
 
+  async function downloadAll() {
+    if (dl) return
+    try {
+      const JSZip = await loadJSZip()
+      const zip = new JSZip()
+      for (let i = 0; i < photos.length; i++) {
+        setDl(`Скачиваю ${i + 1} / ${photos.length}…`)
+        const res = await fetch(photos[i].url)
+        const blob = await res.blob()
+        const num = String(i + 1).padStart(2, '0')
+        zip.file(`${title}-${num}.${extFromUrl(photos[i].url)}`, blob)
+      }
+      setDl('Собираю архив…')
+      const out = await zip.generateAsync({ type: 'blob' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(out)
+      a.download = `${title}.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(a.href)
+      setDl('')
+    } catch {
+      setDl('')
+      alert('Не удалось скачать архив. Попробуйте ещё раз.')
+    }
+  }
+
   if (!photos.length) {
     return (
       <p className="text-center text-gray-500 py-16">В этом альбоме пока нет фотографий.</p>
@@ -40,16 +95,22 @@ export default function AlbumGallery({ photos, title }: { photos: Photo[]; title
 
   return (
     <>
-      <div className="gallery-grid">
+      <div className="flex justify-center mb-10">
+        <button className="btn" onClick={downloadAll} disabled={!!dl}>
+          {dl || 'Скачать все фото'}
+        </button>
+      </div>
+
+      <div className="gallery-masonry">
         {photos.map((photo, i) => (
           <button
             key={photo.id}
-            className="photo-item"
+            className="ph"
             onClick={() => setOpenIndex(i)}
             aria-label={`Открыть фото ${i + 1}`}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo.url} alt={`${title} ${i + 1}`} />
+            <img src={photo.url} alt={`${title} ${i + 1}`} loading="lazy" />
           </button>
         ))}
       </div>

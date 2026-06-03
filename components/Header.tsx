@@ -35,7 +35,6 @@ export default function Header() {
             {navLinks.map((l) => (
               <Link key={l.label} href={l.href} className="nav-link">{l.label}</Link>
             ))}
-            <Link href="/admin" className="nav-link opacity-50">Admin</Link>
           </nav>
 
           {/* Mobile toggle */}
@@ -59,7 +58,6 @@ export default function Header() {
                 {l.label}
               </Link>
             ))}
-            <Link href="/admin" className="nav-link opacity-50" onClick={() => setIsOpen(false)}>Admin</Link>
           </div>
         </nav>
       )}
