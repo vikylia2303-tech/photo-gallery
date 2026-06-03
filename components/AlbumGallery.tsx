@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
-type Photo = { id: string; url: string }
+type Photo = { id: string; url: string; big?: boolean }
 
 declare global {
   interface Window {
@@ -12,6 +12,9 @@ declare global {
     }
   }
 }
+
+const ROW = 8
+const GAP = 14
 
 function loadJSZip(): Promise<NonNullable<Window['JSZip']>> {
   if (window.JSZip) return Promise.resolve(window.JSZip)
@@ -41,6 +44,27 @@ export default function AlbumGallery({
 }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
   const [dl, setDl] = useState('')
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  const setSpan = useCallback((el: HTMLElement) => {
+    const img = el.querySelector('img')
+    const h = img ? img.getBoundingClientRect().height : el.getBoundingClientRect().height
+    if (!h) return
+    const span = Math.max(1, Math.ceil((h + GAP) / (ROW + GAP)))
+    el.style.gridRowEnd = `span ${span}`
+  }, [])
+
+  const resizeAll = useCallback(() => {
+    const grid = gridRef.current
+    if (!grid) return
+    grid.querySelectorAll<HTMLElement>('.ph').forEach((el) => setSpan(el))
+  }, [setSpan])
+
+  useEffect(() => {
+    resizeAll()
+    window.addEventListener('resize', resizeAll)
+    return () => window.removeEventListener('resize', resizeAll)
+  }, [resizeAll, photos])
 
   const close = useCallback(() => setOpenIndex(null), [])
   const prev = useCallback(
@@ -115,16 +139,21 @@ export default function AlbumGallery({
         )}
       </div>
 
-      <div className="gallery-masonry">
+      <div className="gallery-rows" ref={gridRef}>
         {photos.map((photo, i) => (
           <button
             key={photo.id}
-            className="ph"
+            className={`ph${photo.big ? ' big' : ''}`}
             onClick={() => setOpenIndex(i)}
             aria-label={`Открыть фото ${i + 1}`}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo.url} alt={`${title} ${i + 1}`} loading="lazy" />
+            <img
+              src={photo.url}
+              alt={`${title} ${i + 1}`}
+              loading="lazy"
+              onLoad={(e) => setSpan(e.currentTarget.parentElement as HTMLElement)}
+            />
           </button>
         ))}
       </div>

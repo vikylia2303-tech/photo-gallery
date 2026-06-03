@@ -3,8 +3,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { upload } from '@vercel/blob/client'
 
-type Photo = { id: string; url: string }
-type Album = { slug: string; title: string; photos: Photo[]; public?: boolean }
+type Photo = { id: string; url: string; big?: boolean; featured?: boolean }
+type Album = {
+  slug: string
+  title: string
+  photos: Photo[]
+  public?: boolean
+  downloadUrl?: string
+  coverId?: string
+}
 type Manifest = { albums: Album[] }
 
 function slugify(s: string) {
@@ -178,6 +185,32 @@ export default function Admin() {
     updateCurrentPhotos(arr)
   }
 
+  function toggleBig(id: string) {
+    if (!current) return
+    updateCurrentPhotos(
+      current.photos.map((p) => (p.id === id ? { ...p, big: !p.big } : p))
+    )
+  }
+
+  function toggleFeatured(id: string) {
+    if (!current) return
+    updateCurrentPhotos(
+      current.photos.map((p) => (p.id === id ? { ...p, featured: !p.featured } : p))
+    )
+  }
+
+  function setCover(id: string) {
+    if (!current) return
+    const next = {
+      albums: manifest.albums.map((a) =>
+        a.slug === current.slug
+          ? { ...a, coverId: a.coverId === id ? undefined : id }
+          : a
+      ),
+    }
+    save(next)
+  }
+
   if (!authed) {
     return (
       <div className="container-narrow py-32">
@@ -308,11 +341,13 @@ export default function Admin() {
                 />
               </label>
               <p className="text-xs text-gray-400 mb-8">
-                Можно выбрать сразу несколько. Фото грузятся в исходном качестве. Перетаскивайте, чтобы менять порядок.
+                Можно выбрать сразу несколько. Фото грузятся в исходном качестве. Перетаскивайте, чтобы менять порядок (он совпадает с галереей на сайте). Наведите на фото: «обложка» — сделать обложкой альбома, «×2» — крупное фото на всю ширину, «главная» — показать фото в ленте на главной странице.
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {current.photos.map((photo, i) => (
+                {current.photos.map((photo, i) => {
+                  const isCover = current.coverId === photo.id
+                  return (
                   <div
                     key={photo.id}
                     draggable
@@ -322,18 +357,51 @@ export default function Admin() {
                       if (dragIndex.current !== null) move(dragIndex.current, i)
                       dragIndex.current = null
                     }}
-                    className="relative group border border-gray-100 bg-gray-50 aspect-square overflow-hidden cursor-move"
+                    className={`relative group border bg-gray-50 aspect-square overflow-hidden cursor-move ${
+                      photo.big ? 'col-span-2 row-span-2' : ''
+                    } ${isCover ? 'border-black border-2' : 'border-gray-100'}`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={photo.url} alt="" className="w-full h-full object-cover" />
                     <span className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 rounded">{i + 1}</span>
+
+                    {/* badges */}
+                    <div className="absolute top-1 right-1 flex gap-1">
+                      {isCover && <span className="bg-black text-white text-[10px] px-1 rounded">обложка</span>}
+                      {photo.big && <span className="bg-black/70 text-white text-[10px] px-1 rounded">×2</span>}
+                      {photo.featured && <span className="bg-black/70 text-white text-[10px] px-1 rounded">главная</span>}
+                    </div>
+
+                    {/* toggles */}
+                    <div className="absolute inset-x-0 top-7 flex flex-wrap gap-1 px-1 opacity-0 group-hover:opacity-100 transition">
+                      <button
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${isCover ? 'bg-white text-black' : 'bg-black/60 text-white'}`}
+                        onClick={() => setCover(photo.id)}
+                      >
+                        обложка
+                      </button>
+                      <button
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${photo.big ? 'bg-white text-black' : 'bg-black/60 text-white'}`}
+                        onClick={() => toggleBig(photo.id)}
+                      >
+                        ×2
+                      </button>
+                      <button
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${photo.featured ? 'bg-white text-black' : 'bg-black/60 text-white'}`}
+                        onClick={() => toggleFeatured(photo.id)}
+                      >
+                        главная
+                      </button>
+                    </div>
+
                     <div className="absolute inset-x-0 bottom-0 flex justify-between bg-black/50 opacity-0 group-hover:opacity-100 transition">
                       <button className="text-white px-2 py-1 text-sm" onClick={() => move(i, i - 1)} aria-label="Влево">‹</button>
                       <button className="text-white px-2 py-1 text-xs" onClick={() => removePhoto(photo.id)} aria-label="Удалить">✕</button>
                       <button className="text-white px-2 py-1 text-sm" onClick={() => move(i, i + 1)} aria-label="Вправо">›</button>
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
               {current.photos.length === 0 && (
                 <p className="text-gray-400 text-sm">В альбоме пока нет фото — загрузите первые.</p>
