@@ -40,6 +40,7 @@ export default function Admin() {
   const [status, setStatus] = useState('')
   const [uploading, setUploading] = useState('')
   const [error, setError] = useState('')
+  const [linkDraft, setLinkDraft] = useState('')
   const dragIndex = useRef<number | null>(null)
 
   useEffect(() => {
@@ -48,6 +49,11 @@ export default function Admin() {
       return () => clearTimeout(t)
     }
   }, [status])
+
+  useEffect(() => {
+    const a = manifest.albums.find((x) => x.slug === selected)
+    setLinkDraft(a?.downloadUrl || '')
+  }, [selected, manifest])
 
   async function save(next: Manifest) {
     setManifest(next)
@@ -114,6 +120,17 @@ export default function Admin() {
     if (!current) return
     const next = {
       albums: manifest.albums.map((a) => (a.slug === current.slug ? { ...a, public: value } : a)),
+    }
+    save(next)
+  }
+
+  function saveDownloadUrl(value: string) {
+    if (!current) return
+    const url = value.trim()
+    const next = {
+      albums: manifest.albums.map((a) =>
+        a.slug === current.slug ? { ...a, downloadUrl: url || undefined } : a
+      ),
     }
     save(next)
   }
@@ -254,6 +271,30 @@ export default function Admin() {
                   ? 'Альбом виден всем в разделе «Портфолио».'
                   : 'Альбом скрыт из портфолио — открыть можно только по прямой ссылке.'}
               </p>
+
+              <div className="mb-6">
+                <label className="block text-sm mb-1">
+                  Ссылка на Яндекс.Диск для скачивания (необязательно)
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="url"
+                    placeholder="https://disk.yandex.ru/d/..."
+                    value={linkDraft}
+                    onChange={(e) => setLinkDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && saveDownloadUrl(linkDraft)}
+                    className="border border-gray-300 px-3 py-2 w-full max-w-md outline-none focus:border-black text-sm"
+                  />
+                  <button className="btn px-4 py-2" onClick={() => saveDownloadUrl(linkDraft)}>
+                    Сохранить ссылку
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  {current.downloadUrl
+                    ? 'Кнопка «Скачать все фото» на странице альбома ведёт на эту папку.'
+                    : 'Если оставить пустым — кнопка соберёт архив из фото на сайте.'}
+                </p>
+              </div>
 
               <label className="btn btn-primary inline-block mb-2 cursor-pointer">
                 {uploading || 'Загрузить фото'}

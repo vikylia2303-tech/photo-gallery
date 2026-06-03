@@ -30,7 +30,15 @@ function extFromUrl(url: string): string {
   return m ? m[1].toLowerCase() : 'jpg'
 }
 
-export default function AlbumGallery({ photos, title }: { photos: Photo[]; title: string }) {
+export default function AlbumGallery({
+  photos,
+  title,
+  downloadUrl,
+}: {
+  photos: Photo[]
+  title: string
+  downloadUrl?: string
+}) {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
   const [dl, setDl] = useState('')
 
@@ -96,9 +104,15 @@ export default function AlbumGallery({ photos, title }: { photos: Photo[]; title
   return (
     <>
       <div className="flex justify-center mb-10">
-        <button className="btn" onClick={downloadAll} disabled={!!dl}>
-          {dl || 'Скачать все фото'}
-        </button>
+        {downloadUrl ? (
+          <a className="btn" href={downloadUrl} target="_blank" rel="noreferrer">
+            Скачать все фото в хорошем качестве
+          </a>
+        ) : (
+          <button className="btn" onClick={downloadAll} disabled={!!dl}>
+            {dl || 'Скачать все фото'}
+          </button>
+        )}
       </div>
 
       <div className="gallery-masonry">
