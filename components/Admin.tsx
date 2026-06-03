@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { upload } from '@vercel/blob/client'
 
 type Photo = { id: string; url: string }
 type Album = { slug: string; title: string; photos: Photo[] }
@@ -109,18 +110,14 @@ export default function Admin() {
     setError('')
     const added: Photo[] = []
     for (const file of Array.from(files)) {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('album', current.slug)
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { 'x-admin-password': password },
-        body: fd,
-      })
-      if (res.ok) {
-        const { url } = (await res.json()) as { url: string }
-        added.push({ id: (crypto as Crypto).randomUUID(), url })
-      } else {
+      try {
+        const blob = await upload(`photos/${current.slug}/${file.name}`, file, {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
+          clientPayload: password,
+        })
+        added.push({ id: (crypto as Crypto).randomUUID(), url: blob.url })
+      } catch {
         setError('Ошибка загрузки файла')
       }
     }
