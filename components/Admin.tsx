@@ -56,6 +56,12 @@ async function resizeImage(file: File): Promise<Blob> {
   }
 }
 
+function genKey() {
+  return (
+    Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10)
+  )
+}
+
 export default function Admin() {
   const [password, setPassword] = useState('')
   const [authed, setAuthed] = useState(false)
@@ -140,7 +146,12 @@ export default function Admin() {
     if (!title) return
     let slug = slugify(title)
     while (manifest.albums.some((a) => a.slug === slug)) slug = slug + '-2'
-    const next = { albums: [...manifest.albums, { slug, title, photos: [], public: false }] }
+    const next = {
+      albums: [
+        ...manifest.albums,
+        { slug, title, photos: [], public: false, privateKey: genKey() },
+      ],
+    }
     setNewTitle('')
     setSelected(slug)
     save(next)
@@ -251,6 +262,45 @@ export default function Admin() {
     save(next)
   }
 
+  function toggleHidden(id: string) {
+    if (!current) return
+    updateCurrentPhotos(
+      current.photos.map((p) => (p.id === id ? { ...p, hidden: !p.hidden } : p))
+    )
+  }
+
+  function ensurePrivateKey() {
+    if (!current) return
+    const key = current.privateKey || genKey()
+    const next = {
+      albums: manifest.albums.map((a) =>
+        a.slug === current.slug ? { ...a, privateKey: key } : a
+      ),
+    }
+    save(next)
+  }
+
+  function saveAll() {
+    save(manifest)
+  }
+
+  function privateLink() {
+    if (!current || !current.privateKey) return ''
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    return `${origin}/portfolio/${current.slug}?key=${current.privateKey}`
+  }
+
+  async function copyPrivateLink() {
+    const link = privateLink()
+    if (!link) return
+    try {
+      await navigator.clipboard.writeText(link)
+      setStatus('Ссылка скопирована')
+    } catch {
+      setStatus('Скопируйте ссылку вручную')
+    }
+  }
+
   if (!authed) {
     return (
       <div className="container-narrow py-32">
@@ -277,6 +327,9 @@ export default function Admin() {
         <h1 className="section-title text-4xl">Альбомы</h1>
         <div className="flex items-center gap-4">
           {status && <span className="text-sm text-green-600">{status}</span>}
+          <button className="btn px-5 py-2 text-xs" onClick={saveAll}>
+            Сохранить
+          </button>
           <button
             className="text-xs text-gray-500 hover:text-black underline disabled:opacity-50"
             onClick={cleanup}
@@ -378,6 +431,30 @@ export default function Admin() {
                 </p>
               </div>
 
+              <div className="mb-8">
+                <label className="block text-sm mb-1">Приватная ссылка (все фото, для клиента)</label>
+                {current.privateKey ? (
+                  <div className="flex flex-col sm:flex-row gap-2 items-start">
+                    <input
+                      readOnly
+                      value={privateLink()}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="border border-gray-300 px-3 py-2 w-full max-w-xl outline-none text-sm bg-gray-50"
+                    />
+                    <button className="btn px-4 py-2" onClick={copyPrivateLink}>
+                      Скопировать
+                    </button>
+                  </div>
+                ) : (
+                  <button className="btn px-4 py-2" onClick={ensurePrivateKey}>
+                    Создать приватную ссылку
+                  </button>
+                )}
+                <p className="text-xs text-gray-400 mt-1">
+                  По этой ссылке клиент видит ВСЕ фото альбома, включая скрытые из портфолио. Обычная ссылка и портфолио показывают только не скрытые.
+                </p>
+              </div>
+
               <label className="btn btn-primary inline-block mb-2 cursor-pointer">
                 {uploading || 'Загрузить фото'}
                 <input
@@ -390,7 +467,7 @@ export default function Admin() {
                 />
               </label>
               <p className="text-xs text-gray-400 mb-8">
-                Можно выбрать сразу несколько. Фото оптимизируются для сайта (быстрая загрузка), а оригиналы в полном качестве — на Яндекс.Диске (кнопка «Скачать всё»). Перетаскивайте, чтобы менять порядок (он совпадает с галереей на сайте). Наведите на фото: «обложка» — сделать обложкой альбома, «×2» — крупное фото на всю ширину, «главная» — показать фото в ленте на главной странице.
+                Можно выбрать сразу несколько. Фото оптимизируются для сайта (быстрая загрузка), а оригиналы в полном качестве — на Яндекс.Диске (кнопка «Скачать всё»). Перетаскивайте, чтобы менять порядок (он совпадает с галереей на сайте). Наведите на фото: «обложка» — сделать обложкой альбома, «×2» — крупное фото на всю ширину, «главная» — показать фото в ленте на главной странице, «скрыть» — убрать фото из портфолио (в приватной ссылке оно остаётся). После изменений нажмите «Сохранить» вверху.
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -415,11 +492,14 @@ export default function Admin() {
                     <span className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 rounded">{i + 1}</span>
 
                     {/* badges */}
-                    <div className="absolute top-1 right-1 flex gap-1">
+                    <div className="absolute top-1 right-1 flex flex-wrap justify-end gap-1 max-w-[80%]">
                       {isCover && <span className="bg-black text-white text-[10px] px-1 rounded">обложка</span>}
                       {photo.big && <span className="bg-black/70 text-white text-[10px] px-1 rounded">×2</span>}
                       {photo.featured && <span className="bg-black/70 text-white text-[10px] px-1 rounded">главная</span>}
+                      {photo.hidden && <span className="bg-red-600 text-white text-[10px] px-1 rounded">скрыто</span>}
                     </div>
+
+                    {photo.hidden && <div className="absolute inset-0 bg-white/55 pointer-events-none" />}
 
                     {/* toggles */}
                     <div className="absolute inset-x-0 top-7 flex flex-wrap gap-1 px-1 opacity-0 group-hover:opacity-100 transition">
@@ -440,6 +520,12 @@ export default function Admin() {
                         onClick={() => toggleFeatured(photo.id)}
                       >
                         главная
+                      </button>
+                      <button
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${photo.hidden ? 'bg-red-600 text-white' : 'bg-black/60 text-white'}`}
+                        onClick={() => toggleHidden(photo.id)}
+                      >
+                        {photo.hidden ? 'скрыто' : 'скрыть'}
                       </button>
                     </div>
 
