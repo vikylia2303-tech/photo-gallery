@@ -1,7 +1,31 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { upload } from '@vercel/blob/client'
+
+async function resizeImage(file: File): Promise<Blob> {
+  try {
+    const bmp = await createImageBitmap(file)
+    const max = 2200
+    let w = bmp.width
+    let h = bmp.height
+    if (w > max || h > max) {
+      const r = Math.min(max / w, max / h)
+      w = Math.round(w * r)
+      h = Math.round(h * r)
+    }
+    const cv = document.createElement('canvas')
+    cv.width = w
+    cv.height = h
+    const ctx = cv.getContext('2d')
+    if (!ctx) return file
+    ctx.drawImage(bmp, 0, 0, w, h)
+    return await new Promise<Blob>((res) =>
+      cv.toBlob((b) => res(b || file), 'image/jpeg', 0.85)
+    )
+  } catch {
+    return file
+  }
+}
 
 type Photo = { id: string; url: string }
 type Album = { slug: string; title: string; photos: Photo[] }
@@ -111,12 +135,18 @@ export default function Admin() {
     const added: Photo[] = []
     for (const file of Array.from(files)) {
       try {
-        const blob = await upload(`photos/${current.slug}/${file.name}`, file, {
-          access: 'public',
-          handleUploadUrl: '/api/upload',
-          clientPayload: password,
+        const resized = await resizeImage(file)
+        const fd = new FormData()
+        fd.append('file', resized, 'photo.jpg')
+        fd.append('album', current.slug)
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'x-admin-password': password },
+          body: fd,
         })
-        added.push({ id: (crypto as Crypto).randomUUID(), url: blob.url })
+        if (!res.ok) throw new Error('upload failed')
+        const { url } = (await res.json()) as { url: string }
+        added.push({ id: (crypto as Crypto).randomUUID(), url })
       } catch {
         setError('Ошибка загрузки файла')
       }
