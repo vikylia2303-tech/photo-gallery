@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { useState } from 'react'
 
-const portfolioLinks = [
-  { href: '/portfolio/portraits', label: 'Портреты' },
-  { href: '/portfolio/weddings', label: 'Свадьбы' },
-  { href: '/portfolio/events', label: 'События' },
+const navLinks = [
+  { href: '/', label: 'Главная' },
+  { href: '/#portfolio', label: 'Портфолио' },
+  { href: '/about', label: 'Обо мне' },
+  { href: '/#contact', label: 'Контакты' },
 ]
 
 export default function Header() {
@@ -31,21 +32,9 @@ export default function Header() {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-8">
-            <Link href="/" className="nav-link">Главная</Link>
-            <div className="group relative">
-              <button className="nav-link flex items-center gap-1">Портфолио<span className="text-[8px]">▼</span></button>
-              <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 hidden group-hover:block">
-                <div className="bg-white border border-gray-100 shadow-sm py-2 min-w-44">
-                  {portfolioLinks.map((l) => (
-                    <Link key={l.href} href={l.href} className="block px-5 py-2 nav-link hover:bg-gray-50">
-                      {l.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <Link href="/about" className="nav-link">Обо мне</Link>
-            <a href="#contact" className="nav-link">Контакты</a>
+            {navLinks.map((l) => (
+              <Link key={l.label} href={l.href} className="nav-link">{l.label}</Link>
+            ))}
             <Link href="/admin" className="nav-link opacity-50">Admin</Link>
           </nav>
 
@@ -65,14 +54,11 @@ export default function Header() {
       {isOpen && (
         <nav className="md:hidden border-t border-gray-100 py-6 bg-white">
           <div className="container flex flex-col gap-4 items-start">
-            <Link href="/" className="nav-link" onClick={() => setIsOpen(false)}>Главная</Link>
-            {portfolioLinks.map((l) => (
-              <Link key={l.href} href={l.href} className="nav-link" onClick={() => setIsOpen(false)}>
+            {navLinks.map((l) => (
+              <Link key={l.label} href={l.href} className="nav-link" onClick={() => setIsOpen(false)}>
                 {l.label}
               </Link>
             ))}
-            <Link href="/about" className="nav-link" onClick={() => setIsOpen(false)}>Обо мне</Link>
-            <a href="#contact" className="nav-link" onClick={() => setIsOpen(false)}>Контакты</a>
             <Link href="/admin" className="nav-link opacity-50" onClick={() => setIsOpen(false)}>Admin</Link>
           </div>
         </nav>
