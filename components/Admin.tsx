@@ -31,11 +31,29 @@ function slugify(s: string) {
   )
 }
 
-function fileExt(file: File): string {
-  const fromName = (file.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-  if (fromName) return fromName
-  const fromType = (file.type.split('/').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-  return fromType || 'jpg'
+async function resizeImage(file: File): Promise<Blob> {
+  try {
+    const bmp = await createImageBitmap(file)
+    const max = 2000
+    let w = bmp.width
+    let h = bmp.height
+    if (w > max || h > max) {
+      const r = Math.min(max / w, max / h)
+      w = Math.round(w * r)
+      h = Math.round(h * r)
+    }
+    const cv = document.createElement('canvas')
+    cv.width = w
+    cv.height = h
+    const ctx = cv.getContext('2d')
+    if (!ctx) return file
+    ctx.drawImage(bmp, 0, 0, w, h)
+    return await new Promise<Blob>((res) =>
+      cv.toBlob((b) => res(b || file), 'image/jpeg', 0.82)
+    )
+  } catch {
+    return file
+  }
 }
 
 export default function Admin() {
@@ -46,6 +64,7 @@ export default function Admin() {
   const [newTitle, setNewTitle] = useState('')
   const [status, setStatus] = useState('')
   const [uploading, setUploading] = useState('')
+  const [cleaning, setCleaning] = useState('')
   const [error, setError] = useState('')
   const [linkDraft, setLinkDraft] = useState('')
   const dragIndex = useRef<number | null>(null)
@@ -78,21 +97,42 @@ export default function Admin() {
 
   async function login() {
     setError('')
-    const res = await fetch('/api/manifest')
-    const data = (await res.json()) as Manifest
-    const m: Manifest = data && Array.isArray(data.albums) ? data : { albums: [] }
-    const check = await fetch('/api/manifest', {
+    const auth = await fetch('/api/auth', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify(m),
     })
-    if (!check.ok) {
+    if (!auth.ok) {
       setError('Неверный пароль')
       return
     }
+    const res = await fetch('/api/manifest', { cache: 'no-store' })
+    const data = (await res.json()) as Manifest
+    const m: Manifest = data && Array.isArray(data.albums) ? data : { albums: [] }
     setManifest(m)
     setAuthed(true)
     if (m.albums[0]) setSelected(m.albums[0].slug)
+  }
+
+  async function cleanup() {
+    if (cleaning) return
+    if (!confirm('Удалить неиспользуемые файлы из хранилища? Текущие альбомы не пострадают.')) return
+    setCleaning('Очищаю…')
+    setError('')
+    try {
+      const r = await fetch('/api/cleanup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-admin-password': password },
+      })
+      const j = await r.json()
+      if (r.ok) {
+        setStatus(`Удалено лишних файлов: ${j.deleted}`)
+      } else {
+        setError('Не удалось очистить: ' + (j.error || r.status))
+      }
+    } catch {
+      setError('Ошибка очистки')
+    }
+    setCleaning('')
   }
 
   function createAlbum() {
@@ -151,15 +191,15 @@ export default function Admin() {
       const file = list[i]
       setUploading(`Загрузка ${i + 1} / ${list.length}…`)
       try {
+        const data = await resizeImage(file)
         const blob = await upload(
-          `photos/${current.slug}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${fileExt(file)}`,
-          file,
+          `photos/${current.slug}/${Date.now()}-${Math.round(Math.random() * 1e6)}.jpg`,
+          data,
           {
             access: 'public',
             handleUploadUrl: '/api/upload',
             clientPayload: password,
-            multipart: true,
-            contentType: file.type || undefined,
+            contentType: 'image/jpeg',
           }
         )
         added.push({ id: (crypto as Crypto).randomUUID(), url: blob.url })
@@ -235,7 +275,16 @@ export default function Admin() {
     <div className="container py-16">
       <div className="flex items-center justify-between mb-10">
         <h1 className="section-title text-4xl">Альбомы</h1>
-        {status && <span className="text-sm text-green-600">{status}</span>}
+        <div className="flex items-center gap-4">
+          {status && <span className="text-sm text-green-600">{status}</span>}
+          <button
+            className="text-xs text-gray-500 hover:text-black underline disabled:opacity-50"
+            onClick={cleanup}
+            disabled={!!cleaning}
+          >
+            {cleaning || 'Очистить неиспользуемые файлы'}
+          </button>
+        </div>
       </div>
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
@@ -341,7 +390,7 @@ export default function Admin() {
                 />
               </label>
               <p className="text-xs text-gray-400 mb-8">
-                Можно выбрать сразу несколько. Фото грузятся в исходном качестве. Перетаскивайте, чтобы менять порядок (он совпадает с галереей на сайте). Наведите на фото: «обложка» — сделать обложкой альбома, «×2» — крупное фото на всю ширину, «главная» — показать фото в ленте на главной странице.
+                Можно выбрать сразу несколько. Фото оптимизируются для сайта (быстрая загрузка), а оригиналы в полном качестве — на Яндекс.Диске (кнопка «Скачать всё»). Перетаскивайте, чтобы менять порядок (он совпадает с галереей на сайте). Наведите на фото: «обложка» — сделать обложкой альбома, «×2» — крупное фото на всю ширину, «главная» — показать фото в ленте на главной странице.
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
