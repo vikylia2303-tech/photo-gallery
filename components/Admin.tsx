@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { upload } from '@vercel/blob/client'
 
-type Photo = { id: string; url: string; big?: boolean; featured?: boolean }
+type Photo = { id: string; url: string; big?: boolean; featured?: boolean; hidden?: boolean }
 type Album = {
   slug: string
   title: string
@@ -11,8 +11,12 @@ type Album = {
   public?: boolean
   downloadUrl?: string
   coverId?: string
+  privateKey?: string
 }
-type Manifest = { albums: Album[] }
+type Manifest = { albums: Album[]; homeOrder?: string[] }
+
+const ROW = 8
+const GAP = 14
 
 function slugify(s: string) {
   const map: Record<string, string> = {
@@ -67,6 +71,7 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false)
   const [manifest, setManifest] = useState<Manifest>({ albums: [] })
   const [selected, setSelected] = useState<string | null>(null)
+  const [view, setView] = useState<'albums' | 'home'>('albums')
   const [newTitle, setNewTitle] = useState('')
   const [status, setStatus] = useState('')
   const [uploading, setUploading] = useState('')
@@ -74,6 +79,20 @@ export default function Admin() {
   const [error, setError] = useState('')
   const [linkDraft, setLinkDraft] = useState('')
   const dragIndex = useRef<number | null>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  const setSpan = useCallback((el: HTMLElement) => {
+    const img = el.querySelector('img')
+    const h = img ? img.getBoundingClientRect().height : 0
+    if (!h) return
+    el.style.gridRowEnd = `span ${Math.max(1, Math.ceil((h + GAP) / (ROW + GAP)))}`
+  }, [])
+
+  const resizeAll = useCallback(() => {
+    const g = gridRef.current
+    if (!g) return
+    g.querySelectorAll<HTMLElement>('.ph').forEach((el) => setSpan(el))
+  }, [setSpan])
 
   useEffect(() => {
     if (status) {
@@ -86,6 +105,12 @@ export default function Admin() {
     const a = manifest.albums.find((x) => x.slug === selected)
     setLinkDraft(a?.downloadUrl || '')
   }, [selected, manifest])
+
+  useEffect(() => {
+    resizeAll()
+    window.addEventListener('resize', resizeAll)
+    return () => window.removeEventListener('resize', resizeAll)
+  }, [resizeAll, selected, manifest, view])
 
   async function save(next: Manifest) {
     setManifest(next)
@@ -147,6 +172,7 @@ export default function Admin() {
     let slug = slugify(title)
     while (manifest.albums.some((a) => a.slug === slug)) slug = slug + '-2'
     const next = {
+      ...manifest,
       albums: [
         ...manifest.albums,
         { slug, title, photos: [], public: false, privateKey: genKey() },
@@ -159,7 +185,7 @@ export default function Admin() {
 
   function deleteAlbum(slug: string) {
     if (!confirm('Удалить альбом целиком?')) return
-    const next = { albums: manifest.albums.filter((a) => a.slug !== slug) }
+    const next = { ...manifest, albums: manifest.albums.filter((a) => a.slug !== slug) }
     if (selected === slug) setSelected(next.albums[0]?.slug ?? null)
     save(next)
   }
@@ -169,6 +195,7 @@ export default function Admin() {
   function updateCurrentPhotos(photos: Photo[]) {
     if (!current) return
     const next = {
+      ...manifest,
       albums: manifest.albums.map((a) => (a.slug === current.slug ? { ...a, photos } : a)),
     }
     save(next)
@@ -177,6 +204,7 @@ export default function Admin() {
   function togglePublic(value: boolean) {
     if (!current) return
     const next = {
+      ...manifest,
       albums: manifest.albums.map((a) => (a.slug === current.slug ? { ...a, public: value } : a)),
     }
     save(next)
@@ -186,6 +214,7 @@ export default function Admin() {
     if (!current) return
     const url = value.trim()
     const next = {
+      ...manifest,
       albums: manifest.albums.map((a) =>
         a.slug === current.slug ? { ...a, downloadUrl: url || undefined } : a
       ),
@@ -253,6 +282,7 @@ export default function Admin() {
   function setCover(id: string) {
     if (!current) return
     const next = {
+      ...manifest,
       albums: manifest.albums.map((a) =>
         a.slug === current.slug
           ? { ...a, coverId: a.coverId === id ? undefined : id }
@@ -273,6 +303,7 @@ export default function Admin() {
     if (!current) return
     const key = current.privateKey || genKey()
     const next = {
+      ...manifest,
       albums: manifest.albums.map((a) =>
         a.slug === current.slug ? { ...a, privateKey: key } : a
       ),
@@ -301,6 +332,41 @@ export default function Admin() {
     }
   }
 
+  // --- Home feed ordering ---
+  function orderedFeatured() {
+    const list = manifest.albums.flatMap((a) =>
+      a.photos.filter((p) => p.featured).map((p) => ({ photo: p, albumSlug: a.slug }))
+    )
+    const order = manifest.homeOrder || []
+    return [...list].sort((a, b) => {
+      const ia = order.indexOf(a.photo.id)
+      const ib = order.indexOf(b.photo.id)
+      if (ia === -1 && ib === -1) return 0
+      if (ia === -1) return 1
+      if (ib === -1) return -1
+      return ia - ib
+    })
+  }
+
+  function homeMove(from: number, to: number) {
+    const ids = orderedFeatured().map((x) => x.photo.id)
+    if (to < 0 || to >= ids.length) return
+    const [it] = ids.splice(from, 1)
+    ids.splice(to, 0, it)
+    save({ ...manifest, homeOrder: ids })
+  }
+
+  function removeFromHome(id: string) {
+    const next = {
+      ...manifest,
+      albums: manifest.albums.map((a) => ({
+        ...a,
+        photos: a.photos.map((p) => (p.id === id ? { ...p, featured: false } : p)),
+      })),
+    }
+    save(next)
+  }
+
   if (!authed) {
     return (
       <div className="container-narrow py-32">
@@ -323,11 +389,11 @@ export default function Admin() {
 
   return (
     <div className="container py-16">
-      <div className="flex items-center justify-between mb-10">
-        <h1 className="section-title text-4xl">Альбомы</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="section-title text-4xl">Управление</h1>
         <div className="flex items-center gap-4">
           {status && <span className="text-sm text-green-600">{status}</span>}
-          <button className="btn px-5 py-2 text-xs" onClick={saveAll}>
+          <button className="btn btn-primary px-5 py-2 text-xs" onClick={saveAll}>
             Сохранить
           </button>
           <button
@@ -339,212 +405,267 @@ export default function Admin() {
           </button>
         </div>
       </div>
+
+      <div className="flex gap-2 mb-8">
+        <button
+          className={`btn px-5 py-2 text-xs ${view === 'albums' ? 'btn-primary' : ''}`}
+          onClick={() => setView('albums')}
+        >
+          Альбомы
+        </button>
+        <button
+          className={`btn px-5 py-2 text-xs ${view === 'home' ? 'btn-primary' : ''}`}
+          onClick={() => setView('home')}
+        >
+          Главная страница
+        </button>
+      </div>
+
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
-      <div className="flex flex-col md:flex-row gap-10">
-        {/* Albums sidebar */}
-        <aside className="md:w-64 shrink-0">
-          <div className="flex gap-2 mb-4">
-            <input
-              placeholder="Новая фотосессия"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && createAlbum()}
-              className="border border-gray-300 px-3 py-2 w-full outline-none focus:border-black text-sm"
-            />
-            <button className="btn px-4 py-2" onClick={createAlbum}>+</button>
-          </div>
-          <ul className="space-y-1">
-            {manifest.albums.map((a) => (
-              <li key={a.slug}>
-                <button
-                  className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center ${
-                    selected === a.slug ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'
-                  }`}
-                  onClick={() => setSelected(a.slug)}
-                >
-                  <span>
-                    {a.title}
-                    {!a.public && <span className="text-gray-400"> · скрыт</span>}
-                  </span>
-                  <span className="text-gray-400 text-xs">{a.photos.length}</span>
-                </button>
-              </li>
-            ))}
-            {manifest.albums.length === 0 && (
-              <li className="text-sm text-gray-400 px-3 py-2">Альбомов пока нет</li>
-            )}
-          </ul>
-        </aside>
-
-        {/* Album editor */}
-        <div className="flex-1">
-          {!current ? (
-            <p className="text-gray-500">Выберите альбом или создайте новый слева.</p>
+      {view === 'home' ? (
+        <div>
+          <p className="text-sm text-gray-500 mb-4">
+            Лента фотографий на главной странице. Перетаскивайте, чтобы менять порядок. Чтобы добавить фото — в альбоме наведите на снимок и нажмите «главная». ✕ убирает из ленты.
+          </p>
+          {orderedFeatured().length === 0 ? (
+            <p className="text-gray-400 text-sm">
+              Пока ничего не выбрано. Откройте альбом и отметьте нужные фото кнопкой «главная».
+            </p>
           ) : (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl">{current.title}</h2>
-                <button
-                  className="text-sm text-red-600 hover:underline"
-                  onClick={() => deleteAlbum(current.slug)}
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+              {orderedFeatured().map((x, i) => (
+                <div
+                  key={x.photo.id}
+                  draggable
+                  onDragStart={() => (dragIndex.current = i)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (dragIndex.current !== null) homeMove(dragIndex.current, i)
+                    dragIndex.current = null
+                  }}
+                  className="relative group border border-gray-100 bg-gray-50 aspect-[3/4] overflow-hidden cursor-move"
                 >
-                  Удалить альбом
-                </button>
-              </div>
-
-              <label className="flex items-center gap-2 text-sm mb-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={!!current.public}
-                  onChange={(e) => togglePublic(e.target.checked)}
-                />
-                Показывать в портфолио (видно всем)
-              </label>
-              <p className="text-xs text-gray-400 mb-6">
-                {current.public
-                  ? 'Альбом виден всем в разделе «Портфолио».'
-                  : 'Альбом скрыт из портфолио — открыть можно только по прямой ссылке.'}
-              </p>
-
-              <div className="mb-6">
-                <label className="block text-sm mb-1">
-                  Ссылка на Яндекс.Диск для скачивания (необязательно)
-                </label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="url"
-                    placeholder="https://disk.yandex.ru/d/..."
-                    value={linkDraft}
-                    onChange={(e) => setLinkDraft(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && saveDownloadUrl(linkDraft)}
-                    className="border border-gray-300 px-3 py-2 w-full max-w-md outline-none focus:border-black text-sm"
-                  />
-                  <button className="btn px-4 py-2" onClick={() => saveDownloadUrl(linkDraft)}>
-                    Сохранить ссылку
-                  </button>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={x.photo.url} alt="" className="w-full h-full object-cover" />
+                  <span className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 rounded">{i + 1}</span>
+                  <div className="absolute inset-x-0 bottom-0 flex justify-between bg-black/50 opacity-0 group-hover:opacity-100 transition">
+                    <button className="text-white px-2 py-1 text-sm" onClick={() => homeMove(i, i - 1)} aria-label="Влево">‹</button>
+                    <button className="text-white px-2 py-1 text-xs" onClick={() => removeFromHome(x.photo.id)} aria-label="Убрать">✕</button>
+                    <button className="text-white px-2 py-1 text-sm" onClick={() => homeMove(i, i + 1)} aria-label="Вправо">›</button>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  {current.downloadUrl
-                    ? 'Кнопка «Скачать все фото» на странице альбома ведёт на эту папку.'
-                    : 'Если оставить пустым — кнопка соберёт архив из фото на сайте.'}
-                </p>
-              </div>
-
-              <div className="mb-8">
-                <label className="block text-sm mb-1">Приватная ссылка (все фото, для клиента)</label>
-                {current.privateKey ? (
-                  <div className="flex flex-col sm:flex-row gap-2 items-start">
-                    <input
-                      readOnly
-                      value={privateLink()}
-                      onFocus={(e) => e.currentTarget.select()}
-                      className="border border-gray-300 px-3 py-2 w-full max-w-xl outline-none text-sm bg-gray-50"
-                    />
-                    <button className="btn px-4 py-2" onClick={copyPrivateLink}>
-                      Скопировать
-                    </button>
-                  </div>
-                ) : (
-                  <button className="btn px-4 py-2" onClick={ensurePrivateKey}>
-                    Создать приватную ссылку
-                  </button>
-                )}
-                <p className="text-xs text-gray-400 mt-1">
-                  По этой ссылке клиент видит ВСЕ фото альбома, включая скрытые из портфолио. Обычная ссылка и портфолио показывают только не скрытые.
-                </p>
-              </div>
-
-              <label className="btn btn-primary inline-block mb-2 cursor-pointer">
-                {uploading || 'Загрузить фото'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  disabled={!!uploading}
-                  onChange={(e) => onFiles(e.target.files)}
-                />
-              </label>
-              <p className="text-xs text-gray-400 mb-8">
-                Можно выбрать сразу несколько. Фото оптимизируются для сайта (быстрая загрузка), а оригиналы в полном качестве — на Яндекс.Диске (кнопка «Скачать всё»). Перетаскивайте, чтобы менять порядок (он совпадает с галереей на сайте). Наведите на фото: «обложка» — сделать обложкой альбома, «×2» — крупное фото на всю ширину, «главная» — показать фото в ленте на главной странице, «скрыть» — убрать фото из портфолио (в приватной ссылке оно остаётся). После изменений нажмите «Сохранить» вверху.
-              </p>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {current.photos.map((photo, i) => {
-                  const isCover = current.coverId === photo.id
-                  return (
-                  <div
-                    key={photo.id}
-                    draggable
-                    onDragStart={() => (dragIndex.current = i)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => {
-                      if (dragIndex.current !== null) move(dragIndex.current, i)
-                      dragIndex.current = null
-                    }}
-                    className={`relative group border bg-gray-50 aspect-square overflow-hidden cursor-move ${
-                      photo.big ? 'col-span-2 row-span-2' : ''
-                    } ${isCover ? 'border-black border-2' : 'border-gray-100'}`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={photo.url} alt="" className="w-full h-full object-cover" />
-                    <span className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 rounded">{i + 1}</span>
-
-                    {/* badges */}
-                    <div className="absolute top-1 right-1 flex flex-wrap justify-end gap-1 max-w-[80%]">
-                      {isCover && <span className="bg-black text-white text-[10px] px-1 rounded">обложка</span>}
-                      {photo.big && <span className="bg-black/70 text-white text-[10px] px-1 rounded">×2</span>}
-                      {photo.featured && <span className="bg-black/70 text-white text-[10px] px-1 rounded">главная</span>}
-                      {photo.hidden && <span className="bg-red-600 text-white text-[10px] px-1 rounded">скрыто</span>}
-                    </div>
-
-                    {photo.hidden && <div className="absolute inset-0 bg-white/55 pointer-events-none" />}
-
-                    {/* toggles */}
-                    <div className="absolute inset-x-0 top-7 flex flex-wrap gap-1 px-1 opacity-0 group-hover:opacity-100 transition">
-                      <button
-                        className={`text-[10px] px-1.5 py-0.5 rounded ${isCover ? 'bg-white text-black' : 'bg-black/60 text-white'}`}
-                        onClick={() => setCover(photo.id)}
-                      >
-                        обложка
-                      </button>
-                      <button
-                        className={`text-[10px] px-1.5 py-0.5 rounded ${photo.big ? 'bg-white text-black' : 'bg-black/60 text-white'}`}
-                        onClick={() => toggleBig(photo.id)}
-                      >
-                        ×2
-                      </button>
-                      <button
-                        className={`text-[10px] px-1.5 py-0.5 rounded ${photo.featured ? 'bg-white text-black' : 'bg-black/60 text-white'}`}
-                        onClick={() => toggleFeatured(photo.id)}
-                      >
-                        главная
-                      </button>
-                      <button
-                        className={`text-[10px] px-1.5 py-0.5 rounded ${photo.hidden ? 'bg-red-600 text-white' : 'bg-black/60 text-white'}`}
-                        onClick={() => toggleHidden(photo.id)}
-                      >
-                        {photo.hidden ? 'скрыто' : 'скрыть'}
-                      </button>
-                    </div>
-
-                    <div className="absolute inset-x-0 bottom-0 flex justify-between bg-black/50 opacity-0 group-hover:opacity-100 transition">
-                      <button className="text-white px-2 py-1 text-sm" onClick={() => move(i, i - 1)} aria-label="Влево">‹</button>
-                      <button className="text-white px-2 py-1 text-xs" onClick={() => removePhoto(photo.id)} aria-label="Удалить">✕</button>
-                      <button className="text-white px-2 py-1 text-sm" onClick={() => move(i, i + 1)} aria-label="Вправо">›</button>
-                    </div>
-                  </div>
-                  )
-                })}
-              </div>
-              {current.photos.length === 0 && (
-                <p className="text-gray-400 text-sm">В альбоме пока нет фото — загрузите первые.</p>
-              )}
+              ))}
             </div>
           )}
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col md:flex-row gap-10">
+          {/* Albums sidebar */}
+          <aside className="md:w-64 shrink-0">
+            <div className="flex gap-2 mb-4">
+              <input
+                placeholder="Новая фотосессия"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && createAlbum()}
+                className="border border-gray-300 px-3 py-2 w-full outline-none focus:border-black text-sm"
+              />
+              <button className="btn px-4 py-2" onClick={createAlbum}>+</button>
+            </div>
+            <ul className="space-y-1">
+              {manifest.albums.map((a) => (
+                <li key={a.slug}>
+                  <button
+                    className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center ${
+                      selected === a.slug ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'
+                    }`}
+                    onClick={() => setSelected(a.slug)}
+                  >
+                    <span>
+                      {a.title}
+                      {!a.public && <span className="text-gray-400"> · скрыт</span>}
+                    </span>
+                    <span className="text-gray-400 text-xs">{a.photos.length}</span>
+                  </button>
+                </li>
+              ))}
+              {manifest.albums.length === 0 && (
+                <li className="text-sm text-gray-400 px-3 py-2">Альбомов пока нет</li>
+              )}
+            </ul>
+          </aside>
+
+          {/* Album editor */}
+          <div className="flex-1">
+            {!current ? (
+              <p className="text-gray-500">Выберите альбом или создайте новый слева.</p>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl">{current.title}</h2>
+                  <button
+                    className="text-sm text-red-600 hover:underline"
+                    onClick={() => deleteAlbum(current.slug)}
+                  >
+                    Удалить альбом
+                  </button>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm mb-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!current.public}
+                    onChange={(e) => togglePublic(e.target.checked)}
+                  />
+                  Показывать в портфолио (видно всем)
+                </label>
+                <p className="text-xs text-gray-400 mb-6">
+                  {current.public
+                    ? 'Альбом виден всем в разделе «Портфолио».'
+                    : 'Альбом скрыт из портфолио — открыть можно только по прямой ссылке.'}
+                </p>
+
+                <div className="mb-6">
+                  <label className="block text-sm mb-1">
+                    Ссылка на Яндекс.Диск для скачивания (необязательно)
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://disk.yandex.ru/d/..."
+                      value={linkDraft}
+                      onChange={(e) => setLinkDraft(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && saveDownloadUrl(linkDraft)}
+                      className="border border-gray-300 px-3 py-2 w-full max-w-md outline-none focus:border-black text-sm"
+                    />
+                    <button className="btn px-4 py-2" onClick={() => saveDownloadUrl(linkDraft)}>
+                      Сохранить ссылку
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {current.downloadUrl
+                      ? 'Кнопка «Скачать все фото» на странице альбома ведёт на эту папку.'
+                      : 'Если оставить пустым — кнопка соберёт архив из фото на сайте.'}
+                  </p>
+                </div>
+
+                <div className="mb-8">
+                  <label className="block text-sm mb-1">Приватная ссылка (все фото, для клиента)</label>
+                  {current.privateKey ? (
+                    <div className="flex flex-col sm:flex-row gap-2 items-start">
+                      <input
+                        readOnly
+                        value={privateLink()}
+                        onFocus={(e) => e.currentTarget.select()}
+                        className="border border-gray-300 px-3 py-2 w-full max-w-xl outline-none text-sm bg-gray-50"
+                      />
+                      <button className="btn px-4 py-2" onClick={copyPrivateLink}>
+                        Скопировать
+                      </button>
+                    </div>
+                  ) : (
+                    <button className="btn px-4 py-2" onClick={ensurePrivateKey}>
+                      Создать приватную ссылку
+                    </button>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">
+                    По этой ссылке клиент видит ВСЕ фото альбома, включая скрытые из портфолио. Обычная ссылка и портфолио показывают только не скрытые.
+                  </p>
+                </div>
+
+                <label className="btn btn-primary inline-block mb-2 cursor-pointer">
+                  {uploading || 'Загрузить фото'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    disabled={!!uploading}
+                    onChange={(e) => onFiles(e.target.files)}
+                  />
+                </label>
+                <p className="text-xs text-gray-400 mb-8">
+                  Так же фото будут выглядеть на сайте (порядок, пропорции, ×2). Перетаскивайте, чтобы менять порядок. Наведите на фото: «обложка» — обложка альбома, «×2» — крупное фото на всю ширину, «главная» — добавить в ленту на главной, «скрыть» — убрать из портфолио (в приватной ссылке останется). После изменений нажмите «Сохранить».
+                </p>
+
+                <div className="gallery-rows" ref={gridRef}>
+                  {current.photos.map((photo, i) => {
+                    const isCover = current.coverId === photo.id
+                    return (
+                      <div
+                        key={photo.id}
+                        draggable
+                        onDragStart={() => (dragIndex.current = i)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          if (dragIndex.current !== null) move(dragIndex.current, i)
+                          dragIndex.current = null
+                        }}
+                        className={`ph relative group ${photo.big ? 'big' : ''}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photo.url}
+                          alt=""
+                          loading="lazy"
+                          onLoad={(e) => setSpan(e.currentTarget.parentElement as HTMLElement)}
+                        />
+                        <span className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 rounded">{i + 1}</span>
+
+                        <div className="absolute top-1 right-1 flex flex-wrap justify-end gap-1 max-w-[85%]">
+                          {isCover && <span className="bg-black text-white text-[10px] px-1 rounded">обложка</span>}
+                          {photo.big && <span className="bg-black/70 text-white text-[10px] px-1 rounded">×2</span>}
+                          {photo.featured && <span className="bg-black/70 text-white text-[10px] px-1 rounded">главная</span>}
+                          {photo.hidden && <span className="bg-red-600 text-white text-[10px] px-1 rounded">скрыто</span>}
+                        </div>
+
+                        {photo.hidden && <div className="absolute inset-0 bg-white/55 pointer-events-none" />}
+
+                        <div className="absolute inset-x-0 top-7 flex flex-wrap gap-1 px-1 opacity-0 group-hover:opacity-100 transition">
+                          <button
+                            className={`text-[10px] px-1.5 py-0.5 rounded ${isCover ? 'bg-white text-black' : 'bg-black/60 text-white'}`}
+                            onClick={() => setCover(photo.id)}
+                          >
+                            обложка
+                          </button>
+                          <button
+                            className={`text-[10px] px-1.5 py-0.5 rounded ${photo.big ? 'bg-white text-black' : 'bg-black/60 text-white'}`}
+                            onClick={() => toggleBig(photo.id)}
+                          >
+                            ×2
+                          </button>
+                          <button
+                            className={`text-[10px] px-1.5 py-0.5 rounded ${photo.featured ? 'bg-white text-black' : 'bg-black/60 text-white'}`}
+                            onClick={() => toggleFeatured(photo.id)}
+                          >
+                            главная
+                          </button>
+                          <button
+                            className={`text-[10px] px-1.5 py-0.5 rounded ${photo.hidden ? 'bg-red-600 text-white' : 'bg-black/60 text-white'}`}
+                            onClick={() => toggleHidden(photo.id)}
+                          >
+                            {photo.hidden ? 'скрыто' : 'скрыть'}
+                          </button>
+                        </div>
+
+                        <div className="absolute inset-x-0 bottom-0 flex justify-between bg-black/50 opacity-0 group-hover:opacity-100 transition">
+                          <button className="text-white px-2 py-1 text-sm" onClick={() => move(i, i - 1)} aria-label="Влево">‹</button>
+                          <button className="text-white px-2 py-1 text-xs" onClick={() => removePhoto(photo.id)} aria-label="Удалить">✕</button>
+                          <button className="text-white px-2 py-1 text-sm" onClick={() => move(i, i + 1)} aria-label="Вправо">›</button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                {current.photos.length === 0 && (
+                  <p className="text-gray-400 text-sm">В альбоме пока нет фото — загрузите первые.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
