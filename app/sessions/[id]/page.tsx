@@ -32,7 +32,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
 
     async function fetchSession() {
       try {
-        const response = await fetch(`/api/sessions/${paramsResolved.id}`)
+        const response = await fetch(`/api/sessions/${paramsResolved!.id}`)
         if (response.ok) {
           const data = await response.json()
           setSession(data)
