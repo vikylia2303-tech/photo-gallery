@@ -8,10 +8,12 @@ interface PageProps {
   params: Promise<{
     category: string
   }>
+  searchParams: Promise<{ key?: string }>
 }
 
-export default async function AlbumPage({ params }: PageProps) {
+export default async function AlbumPage({ params, searchParams }: PageProps) {
   const { category } = await params
+  const { key } = await searchParams
   const manifest = await getManifest()
   const album = manifest.albums.find((a) => a.slug === category)
 
@@ -25,15 +27,21 @@ export default async function AlbumPage({ params }: PageProps) {
     )
   }
 
+  const isPrivate = !!album.privateKey && key === album.privateKey
+  const photos = isPrivate ? album.photos : album.photos.filter((p) => !p.hidden)
+
   return (
     <div className="py-20">
       <div className="container">
         <div className="text-center mb-14">
           <p className="overline mb-4">Фотосессия</p>
           <h1 className="section-title text-5xl md:text-6xl">{album.title}</h1>
+          {isPrivate && (
+            <p className="text-xs text-gray-400 mt-3">Личная ссылка — показаны все фото</p>
+          )}
         </div>
 
-        <AlbumGallery photos={album.photos} title={album.title} downloadUrl={album.downloadUrl} />
+        <AlbumGallery photos={photos} title={album.title} downloadUrl={album.downloadUrl} />
 
         <div className="text-center mt-16">
           <a href="/#contact" className="btn">Записаться на съёмку</a>
