@@ -6,7 +6,18 @@ export const dynamic = 'force-dynamic'
 export default async function Home() {
   const manifest = await getManifest()
   const albums = manifest.albums.filter((a) => a.photos.length > 0 && a.public)
-  const chosen = manifest.albums.flatMap((a) => a.photos).filter((p) => p.featured)
+  const order = manifest.homeOrder || []
+  const chosen = manifest.albums
+    .flatMap((a) => a.photos)
+    .filter((p) => p.featured)
+    .sort((a, b) => {
+      const ia = order.indexOf(a.id)
+      const ib = order.indexOf(b.id)
+      if (ia === -1 && ib === -1) return 0
+      if (ia === -1) return 1
+      if (ib === -1) return -1
+      return ia - ib
+    })
   const heroPhotos = chosen.length > 0 ? chosen : albums.flatMap((a) => a.photos).slice(0, 8)
 
   return (
