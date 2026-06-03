@@ -4,7 +4,7 @@ export default function AboutPage() {
       <section className="py-20">
         <div className="container-narrow text-center">
           <p className="overline mb-6">Обо мне</p>
-          <h1 className="section-title text-5xl md:text-6xl mb-12">Привет! Меня зовут Юлия</h1>
+          <h1 className="section-title text-5xl md:text-6xl mb-12">Привет! Меня зовут Вика</h1>
         </div>
       </section>
 
