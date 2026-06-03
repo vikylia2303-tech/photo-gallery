@@ -2,7 +2,7 @@ import { list, put } from '@vercel/blob'
 
 const MANIFEST_PATH = 'manifest.json'
 
-export type Photo = { id: string; url: string; big?: boolean; featured?: boolean }
+export type Photo = { id: string; url: string; big?: boolean; featured?: boolean; hidden?: boolean }
 export type Album = {
   slug: string
   title: string
@@ -10,6 +10,7 @@ export type Album = {
   public?: boolean
   downloadUrl?: string
   coverId?: string
+  privateKey?: string
 }
 export type Manifest = { albums: Album[] }
 
