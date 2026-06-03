@@ -12,7 +12,7 @@ export default async function Home() {
     <div>
       {/* Hero signature */}
       <section className="pt-16 pb-12 text-center">
-        <h1 className="signature text-6xl md:text-7xl text-black">Вика</h1>
+        <h1 className="signature text-5xl md:text-6xl text-black">Victoria Ustyuzhanina</h1>
         <p className="overline mt-3">photographer</p>
       </section>
 
