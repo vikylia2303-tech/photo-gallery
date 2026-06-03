@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { upload } from '@vercel/blob/client'
 
 async function resizeImage(file: File): Promise<Blob> {
   try {
@@ -135,18 +136,17 @@ export default function Admin() {
     const added: Photo[] = []
     for (const file of Array.from(files)) {
       try {
-        const resized = await resizeImage(file)
-        const fd = new FormData()
-        fd.append('file', resized, 'photo.jpg')
-        fd.append('album', current.slug)
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'x-admin-password': password },
-          body: fd,
-        })
-        if (!res.ok) throw new Error('upload failed')
-        const { url } = (await res.json()) as { url: string }
-        added.push({ id: (crypto as Crypto).randomUUID(), url })
+        const data = await resizeImage(file)
+        const blob = await upload(
+          `photos/${current.slug}/${Date.now()}-${Math.round(Math.random() * 1e6)}.jpg`,
+          data,
+          {
+            access: 'public',
+            handleUploadUrl: '/api/upload',
+            clientPayload: password,
+          }
+        )
+        added.push({ id: (crypto as Crypto).randomUUID(), url: blob.url })
       } catch {
         setError('Ошибка загрузки файла')
       }
