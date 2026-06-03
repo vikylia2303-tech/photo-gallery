@@ -13,7 +13,7 @@ export async function getManifest(): Promise<Manifest> {
     const { blobs } = await list({ prefix: MANIFEST_PATH })
     const blob = blobs.find((b) => b.pathname === MANIFEST_PATH)
     if (!blob) return EMPTY
-    const res = await fetch(blob.url, { cache: 'no-store' })
+    const res = await fetch(`${blob.url}?ts=${Date.now()}`, { cache: 'no-store' })
     if (!res.ok) return EMPTY
     const data = (await res.json()) as Manifest
     if (!data || !Array.isArray(data.albums)) return EMPTY
@@ -29,5 +29,6 @@ export async function saveManifest(manifest: Manifest): Promise<void> {
     contentType: 'application/json',
     addRandomSuffix: false,
     allowOverwrite: true,
+    cacheControlMaxAge: 0,
   })
 }
