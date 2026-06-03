@@ -1,4 +1,11 @@
-export default function AboutPage() {
+import { getManifest } from '@/lib/manifest'
+
+export const dynamic = 'force-dynamic'
+
+export default async function AboutPage() {
+  const manifest = await getManifest()
+  const photo = manifest.aboutPhoto
+
   return (
     <div>
       <section className="py-20">
@@ -8,20 +15,24 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="mb-16">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="https://picsum.photos/seed/about-portrait/1600/1000"
-          alt="Портрет фотографа"
-          className="w-full h-[60vh] object-cover bw"
-        />
-      </section>
+      {photo && (
+        <section className="mb-16">
+          <div className="container-narrow">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photo}
+              alt="Вика"
+              className="w-full max-w-md mx-auto"
+            />
+          </div>
+        </section>
+      )}
 
       <section className="pb-24">
         <div className="container-narrow space-y-6 text-[17px] leading-relaxed text-gray-600">
           <p>
-            Фотография появилась в моей жизни давно — когда-то это было простое увлечение,
-            желание поймать моменты, которые иначе растворяются во времени.
+            Фотография появилась в моей жизни давно — когда-то это было простое увлечение, желание
+            поймать моменты, которые иначе растворяются во времени.
           </p>
           <p>
             Сейчас это моё любимое хобби, от которого я по-настоящему кайфую. Каждая съёмка для меня —
@@ -34,7 +45,7 @@ export default function AboutPage() {
           </p>
 
           <div className="pt-8 text-center">
-            <a href="#contact" className="btn">Связаться со мной</a>
+            <a href="/#contact" className="btn">Связаться со мной</a>
           </div>
         </div>
       </section>
