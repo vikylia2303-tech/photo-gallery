@@ -33,7 +33,7 @@ export default async function AlbumPage({ params }: PageProps) {
           <h1 className="section-title text-5xl md:text-6xl">{album.title}</h1>
         </div>
 
-        <AlbumGallery photos={album.photos} title={album.title} />
+        <AlbumGallery photos={album.photos} title={album.title} downloadUrl={album.downloadUrl} />
 
         <div className="text-center mt-16">
           <a href="/#contact" className="btn">Записаться на съёмку</a>
