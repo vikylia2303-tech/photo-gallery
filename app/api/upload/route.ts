@@ -1,33 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { put } from '@vercel/blob'
 
-export async function POST(request: NextRequest) {
-  try {
-    const formData = await request.formData()
-    const file = formData.get('file') as File
-    const gallery = formData.get('gallery') as string
+export const dynamic = 'force-dynamic'
 
-    if (!file || !gallery) {
-      return NextResponse.json(
-        { error: 'Missing file or gallery' },
-        { status: 400 }
-      )
-    }
-
-    // TODO: Интегрировать с Яндекс Диском
-    // Здесь будет логика загрузки файла на Яндекс Диск
-    // и создание двух версий (для соцсетей и оригинал)
-
-    console.log(`Uploading ${file.name} to gallery ${gallery}`)
-
-    return NextResponse.json(
-      { success: true, message: 'File uploaded' },
-      { status: 200 }
-    )
-  } catch (error) {
-    console.error('Upload error:', error)
-    return NextResponse.json(
-      { error: 'Upload failed' },
-      { status: 500 }
-    )
+export async function POST(req: NextRequest) {
+  const pwd = req.headers.get('x-admin-password')
+  if (!process.env.ADMIN_PASSWORD || pwd !== process.env.ADMIN_PASSWORD) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
+
+  const form = await req.formData()
+  const file = form.get('file')
+  const album = (form.get('album') as string) || 'misc'
+  if (!file || typeof file === 'string') {
+    return NextResponse.json({ error: 'no file' }, { status: 400 })
+  }
+
+  const safeAlbum = album.replace(/[^a-z0-9-]/gi, '-').toLowerCase() || 'misc'
+  const safeName = file.name.replace(/[^a-z0-9.\-_]/gi, '_')
+  const blob = await put(`photos/${safeAlbum}/${Date.now()}-${safeName}`, file, {
+    access: 'public',
+    addRandomSuffix: true,
+  })
+
+  return NextResponse.json({ url: blob.url })
 }
