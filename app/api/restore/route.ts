@@ -33,6 +33,14 @@ function genKey() {
   return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10)
 }
 
+function uid() {
+  return (
+    Date.now().toString(36) +
+    Math.random().toString(36).slice(2, 10) +
+    Math.random().toString(36).slice(2, 6)
+  )
+}
+
 export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const blobs = await listAll()
@@ -46,34 +54,41 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  const blobs = await listAll()
-  const groups: Record<string, { pathname: string; url: string }[]> = {}
-  for (const b of blobs) {
-    const slug = b.pathname.split('/')[1]
-    if (!slug) continue
-    ;(groups[slug] = groups[slug] || []).push(b)
-  }
-  const albums: Album[] = []
-  let aboutPhoto: string | undefined
-  for (const slug of Object.keys(groups)) {
-    const items = groups[slug].sort((a, b) => a.pathname.localeCompare(b.pathname))
-    if (slug === 'about') {
-      aboutPhoto = items[items.length - 1]?.url
-      continue
+  try {
+    const blobs = await listAll()
+    const groups: Record<string, { pathname: string; url: string }[]> = {}
+    for (const b of blobs) {
+      const slug = b.pathname.split('/')[1]
+      if (!slug) continue
+      ;(groups[slug] = groups[slug] || []).push(b)
     }
-    albums.push({
-      slug,
-      title: TITLES[slug] || slug.replace(/-/g, ' '),
-      photos: items.map((b) => ({ id: crypto.randomUUID(), url: b.url })),
-      public: false,
-      privateKey: genKey(),
+    const albums: Album[] = []
+    let aboutPhoto: string | undefined
+    for (const slug of Object.keys(groups)) {
+      const items = groups[slug].sort((a, b) => a.pathname.localeCompare(b.pathname))
+      if (slug === 'about') {
+        aboutPhoto = items[items.length - 1]?.url
+        continue
+      }
+      albums.push({
+        slug,
+        title: TITLES[slug] || slug.replace(/-/g, ' '),
+        photos: items.map((b) => ({ id: uid(), url: b.url })),
+        public: false,
+        privateKey: genKey(),
+      })
+    }
+    const manifest: Manifest = { albums }
+    if (aboutPhoto) manifest.aboutPhoto = aboutPhoto
+    await saveManifest(manifest)
+    return NextResponse.json({
+      restored: albums.map((a) => ({ slug: a.slug, title: a.title, photos: a.photos.length })),
+      aboutPhoto: !!aboutPhoto,
     })
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'restore error' },
+      { status: 500 }
+    )
   }
-  const manifest: Manifest = { albums }
-  if (aboutPhoto) manifest.aboutPhoto = aboutPhoto
-  await saveManifest(manifest)
-  return NextResponse.json({
-    restored: albums.map((a) => ({ slug: a.slug, title: a.title, photos: a.photos.length })),
-    aboutPhoto: !!aboutPhoto,
-  })
 }
